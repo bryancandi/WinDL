@@ -25,6 +25,27 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    const char *url_tail = url;
+
+    if (strncmp(url, "https://", 8) != 0 &&
+        strncmp(url, "http://", 7) != 0 &&
+        strncmp(url, "ftp://", 6) != 0)
+    {
+        const char *p = strstr(url, "://");
+        if (p)
+        {
+            url_tail = p + 3;
+        }
+
+        fprintf(stderr,
+            "Please explicitly specify a supported protocol:\n"
+            " - https://%s\n"
+            " - http://%s\n"
+            " - ftp://%s\n",
+            url_tail, url_tail, url_tail);
+        return 1;
+    }
+
     HINTERNET hInternet = InternetOpen(agent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInternet)
     {
