@@ -11,13 +11,15 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <windows.h>
 #include <wininet.h>
 
-#define REQUIRED_ARGS 2
 #define PROTO_HTTPS_LEN 8
 #define PROTO_HTTP_LEN 7
 #define PROTO_FTP_LEN 6
+#define PROTO_SLASH 3
+#define REQUIRED_ARGS 2
 
 int open_url(const char *agent, const char *url);
 void print_wininet_error(const char *label);
@@ -26,10 +28,11 @@ int main(int argc, char *argv[])
 {
     const char *agent = "WinDL/1.0";
     const char *prog = argv[0];
+    const char *version = "WinDL by Bryan C.";
 
     if (argc == REQUIRED_ARGS && (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0))
     {
-        printf("%s by Bryan C.\n", agent);
+        printf("%s\n", version);
         return 0;
     }
 
@@ -64,6 +67,7 @@ int main(int argc, char *argv[])
     return open_url(agent, url);
 }
 
+/* Open a WinINet connection, open the specified URL, and download its contents to stdout. */
 int open_url(const char *agent, const char *url)
 {
     HINTERNET hInternet = InternetOpen(agent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
@@ -83,7 +87,21 @@ int open_url(const char *agent, const char *url)
         return 1;
     }
 
-    fprintf(stderr, "Loading [%s]\n\n", url);
+    fprintf(stderr, "Loading [%s]\n", url);
+
+    /* Advance 'path' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
+    char *path = strstr(url, "://");
+    path += PROTO_SLASH;
+    char *fname = strrchr(path, '/');
+
+    if (!fname || *(fname + 1) == '\0')
+    {
+        fprintf(stderr, "Filename not found, using default [download_%li]\n\n", time(NULL));
+    }
+    else
+    {
+        fprintf(stderr, "Filename [%s]\n\n", ++fname);
+    }
 
     char buffer[BUFSIZ];
     DWORD bytesRead;
@@ -99,6 +117,7 @@ int open_url(const char *agent, const char *url)
     return 0;
 }
 
+/* Print a WinINet error message and error code. */
 void print_wininet_error(const char *label)
 {
     DWORD err = GetLastError();
