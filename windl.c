@@ -23,6 +23,7 @@
 
 int open_url(const char *agent, const char *url);
 void print_wininet_error(const char *label);
+unsigned long long get_download_size(HINTERNET hFile);
 
 int main(int argc, char *argv[])
 {
@@ -96,20 +97,43 @@ int open_url(const char *agent, const char *url)
 
     if (!fname || *(fname + 1) == '\0')
     {
-        fprintf(stderr, "Filename not found, using default [download_%li]\n\n", time(NULL));
+        fprintf(stderr, "Filename not found, using default [download_%li]\n", time(NULL));
     }
     else
     {
         fprintf(stderr, "Filename [%s]\n\n", ++fname);
     }
 
+    unsigned long long total_size = get_download_size(hFile);
+    unsigned long long downloaded_size = 0;
+
     char buffer[BUFSIZ];
-    DWORD bytesRead;
+    DWORD bytesRead = 0;
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
+        downloaded_size += bytesRead;
         fwrite(buffer, 1, bytesRead, stdout);
+
+        if (total_size > 0)
+        {
+            if (downloaded_size % (1024 * 1024) == 0)
+            {
+                fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", total_size, downloaded_size);
+                fflush(stderr);
+            }
+        }
+        else
+        {
+            if (downloaded_size % (1024 * 1024) == 0)
+            {
+                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloaded_size);
+                fflush(stderr);
+            }
+        }
     }
+
+    fprintf(stderr, "\nDownload complete\n");
 
     InternetCloseHandle(hFile);
     InternetCloseHandle(hInternet);
@@ -148,4 +172,23 @@ void print_wininet_error(const char *label)
     {
         fprintf(stderr, "%s failed: %lu\n", label, err);
     }
+}
+
+/* Get file size from hFile */
+unsigned long long get_download_size(HINTERNET hFile)
+{
+    char buffer[BUFSIZ];
+    DWORD size = sizeof(buffer);
+
+    if (!HttpQueryInfoA(
+        hFile,
+        HTTP_QUERY_CONTENT_LENGTH,
+        buffer,
+        &size,
+        NULL))
+    {
+        return 0;
+    }
+
+    return strtoull(buffer, NULL, 10);
 }
