@@ -22,7 +22,7 @@
 #define REQUIRED_ARGS 2
 #define MEBIBYTE (1024ULL * 1024ULL)
 
-int download_url(const char *agent, const char *url);
+int download_file(const char *agent, const char *url);
 void print_wininet_error(const char *label);
 unsigned long long get_file_size(HINTERNET hFile);
 
@@ -30,11 +30,10 @@ int main(int argc, char *argv[])
 {
     const char *agent = "WinDL/1.0";
     const char *prog = argv[0];
-    const char *version = "WinDL by Bryan C.";
 
     if (argc == REQUIRED_ARGS && (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0))
     {
-        printf("%s\n", version);
+        printf("%s by Bryan C.\n", agent);
         return 0;
     }
 
@@ -66,11 +65,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    return download_url(agent, url);
+    return download_file(agent, url);
 }
 
 /* Open a WinINet connection, open the specified URL, and download its contents to 'dst' file. */
-int download_url(const char *agent, const char *url)
+int download_file(const char *agent, const char *url)
 {
     HINTERNET hInternet = InternetOpen(agent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInternet)
@@ -161,7 +160,14 @@ int download_url(const char *agent, const char *url)
         fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloaded_size);
     }
 
-    fprintf(stderr, "\nDownload complete\n");
+    if (total_size == downloaded_size || total_size == 0)
+    {
+        fprintf(stderr, "\nDownload completed successfully.\n");
+    }
+    else
+    {
+        fprintf(stderr, "\nDownload failed. (expected %llu bytes, got %llu bytes)\n", total_size, downloaded_size);
+    }
 
     fclose(dst);
     InternetCloseHandle(hFile);
@@ -203,21 +209,39 @@ void print_wininet_error(const char *label)
     }
 }
 
-/* Get file size from hFile */
+/* Determine handle type and attempt to get the file size. */
 unsigned long long get_file_size(HINTERNET hFile)
 {
-    char buffer[BUFSIZ];
-    DWORD size = sizeof(buffer);
+    DWORD handle_type = 0;
+    DWORD len = sizeof(handle_type);
 
-    if (!HttpQueryInfoA(
-        hFile,
-        HTTP_QUERY_CONTENT_LENGTH,
-        buffer,
-        &size,
-        NULL))
+    if (InternetQueryOption(hFile, INTERNET_OPTION_HANDLE_TYPE, &handle_type, &len))
     {
-        return 0;
+        if (handle_type == INTERNET_HANDLE_TYPE_HTTP_REQUEST)
+        {
+            char buffer[64];
+            DWORD size = sizeof(buffer);
+
+            if (!HttpQueryInfoA(hFile, HTTP_QUERY_CONTENT_LENGTH, buffer, &size, NULL))
+            {
+                return 0;
+            }
+
+            return strtoull(buffer, NULL, 10);
+        }
+        else if (handle_type == INTERNET_HANDLE_TYPE_FTP_FILE)
+        {
+            DWORD high = 0;
+            DWORD low = FtpGetFileSize(hFile, &high);
+
+            if (low == INVALID_FILE_SIZE)
+            {
+                return 0;
+            }
+
+            return ((unsigned long long)high << 32) | low;
+        }
     }
 
-    return strtoull(buffer, NULL, 10);
+    return 0;
 }
