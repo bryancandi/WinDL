@@ -17,8 +17,9 @@ This project is a work in progress and focuses on clarity and simplicity.
 ```powershell
 .\windl.exe [URL]
 # Examples
-.\windl.exe https://example.com/file.txt
-.\windl.exe https://example.com/file.txt > file.txt
+.\windl.exe https://www.example.com/file.zip
+.\windl.exe ftp://user:password@ftp.example.com/file.zip
+
 ```
 
 ### Compile
