@@ -88,25 +88,26 @@ int download_file(const char *agent, const char *url)
         return 1;
     }
 
-    fprintf(stderr, "Loading URL [%s]\n", url);
+    fprintf(stderr, "Opening Source URL [%s]\n", url);
 
     /* Advance 'path' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
     char *path = strstr(url, "://");
     path += PROTO_SLASH;
     char *fname = strrchr(path, '/');
     char default_fname[64];
+    char *destination = "Destination File";
     long int current_time = time(NULL);
 
     if (!fname || *(fname + 1) == '\0')
     {
         snprintf(default_fname, sizeof(default_fname), "download_%ld", current_time);
         fname = default_fname;
-        fprintf(stderr, "Destination [%s] (no filename provided by server, using default)\n\n", fname);
+        fprintf(stderr, "%s [%s] (no filename provided by server, using default)\n\n", destination, fname);
     }
     else
     {
         fname++;
-        fprintf(stderr, "Destination [%s]\n\n", fname);
+        fprintf(stderr, "%s [%s]\n\n", destination, fname);
     }
 
     unsigned long long total_size = get_file_size(hFile);
@@ -121,6 +122,8 @@ int download_file(const char *agent, const char *url)
         fprintf(stderr, "WinDL: Cannot create destination file '%s'\n", fname);
         return 1;
     }
+
+    time_t start_time = time(NULL);
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
@@ -150,6 +153,9 @@ int download_file(const char *agent, const char *url)
         }
     }
 
+    time_t end_time = time(NULL);
+    double elapsed_time = difftime(end_time, start_time);
+
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
     if (total_size > 0)
     {
@@ -162,12 +168,14 @@ int download_file(const char *agent, const char *url)
 
     if (total_size == downloaded_size || total_size == 0)
     {
-        fprintf(stderr, "\nDownload completed successfully.\n");
+        fprintf(stderr, "\nDownload completed successfully. (%llu bytes in %.2lf seconds)\n", downloaded_size, elapsed_time);
     }
     else
     {
         fprintf(stderr, "\nDownload failed. (expected %llu bytes, got %llu bytes)\n", total_size, downloaded_size);
     }
+
+    putchar('\n');
 
     fclose(dst);
     InternetCloseHandle(hFile);
