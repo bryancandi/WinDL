@@ -7,10 +7,10 @@ This project is a work in progress and focuses on clarity and simplicity.
 
 ### Features
 
-- HTTP/HTTPS downloads using WinINet.
+- Download files over HTTP, HTTPS, or FTP.
+- Display total file size (when available) and track download progress.
 - Simple command-line interface.
-- Outputs downloaded data to `stdout` (for now).
-- Minimal dependencies (Windows API only).
+- Built using the native Windows WinINet API.
 
 ### Usage
 
