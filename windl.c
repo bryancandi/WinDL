@@ -23,12 +23,23 @@
 #define MEBIBYTE (1024ULL * 1024ULL)
 
 int DownloadFile(const char *userAgent, const char *url);
-int FileExists(const char* fileName);
+int FileExists(const char *fileName);
 void PrintWinINetError(const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
+void SpinnerStart(void);
+void SpinnerStop(void);
+
+static BOOL g_UsingWT = FALSE;
 
 int main(int argc, char *argv[])
 {
+    /* Detect Windows Terminal session */
+    g_UsingWT = getenv("WT_SESSION") != NULL;
+
+    /* Install Control Handler */
+    SetConsoleCtrlHandler(CtrlHandler, TRUE);
+
     const char *userAgent = "WinDL/1.0";
     const char *progName = argv[0];
 
@@ -72,9 +83,12 @@ int main(int argc, char *argv[])
 /* Open a WinINet connection, open the specified URL, and download its contents to 'dst' file. */
 int DownloadFile(const char *userAgent, const char *url)
 {
+    SpinnerStart();
+
     HINTERNET hInternet = InternetOpenA(userAgent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInternet)
     {
+        SpinnerStop();
         PrintWinINetError("InternetOpenA");
         return 1;
     }
@@ -84,6 +98,7 @@ int DownloadFile(const char *userAgent, const char *url)
     HINTERNET hFile = InternetOpenUrlA(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hFile)
     {
+        SpinnerStop();
         PrintWinINetError("InternetOpenUrlA");
         InternetCloseHandle(hInternet);
         return 1;
@@ -95,6 +110,7 @@ int DownloadFile(const char *userAgent, const char *url)
     const char *urlPath = strstr(url, "://");
     if (!urlPath)
     {
+        SpinnerStop();
         fprintf(stderr, "WinDL: Malformed URL.\n");
         InternetCloseHandle(hFile);
         InternetCloseHandle(hInternet);
@@ -119,6 +135,8 @@ int DownloadFile(const char *userAgent, const char *url)
 
     if (FileExists(fileName))
     {
+        SpinnerStop();
+
         fprintf(stderr, "File [%s] exists in current directory. Overwrite? (Y/N): ", fileName);
 
         int c;
@@ -129,10 +147,12 @@ int DownloadFile(const char *userAgent, const char *url)
 
             if (c == 'Y' || c == 'y')
             {
+                SpinnerStart();
                 break;
             }
             else if (c == 'N' || c == 'n')
             {
+                SpinnerStop();
                 InternetCloseHandle(hFile);
                 InternetCloseHandle(hInternet);
                 return 1;
@@ -153,6 +173,7 @@ int DownloadFile(const char *userAgent, const char *url)
 
     if ((dst = fopen(fileName, "wb")) == NULL)
     {
+        SpinnerStop();
         fprintf(stderr, "WinDL: Cannot create destination file '%s'.\n", fileName);
         InternetCloseHandle(hFile);
         InternetCloseHandle(hInternet);
@@ -166,6 +187,7 @@ int DownloadFile(const char *userAgent, const char *url)
         downloadedSize += bytesRead;
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
+            SpinnerStop();
             fprintf(stderr, "WinDL: Write error on '%s'.\n", fileName);
             fclose(dst);
             InternetCloseHandle(hFile);
@@ -215,6 +237,7 @@ int DownloadFile(const char *userAgent, const char *url)
 
     putchar('\n');
 
+    SpinnerStop();
     fclose(dst);
     InternetCloseHandle(hFile);
     InternetCloseHandle(hInternet);
@@ -223,7 +246,7 @@ int DownloadFile(const char *userAgent, const char *url)
 }
 
 /* Check if 'fileName' already exists in the current directory */
-int FileExists(const char* fileName)
+int FileExists(const char *fileName)
 {
     WIN32_FIND_DATAA FindFileData;
     HANDLE hFile = FindFirstFileA(fileName, &FindFileData);
@@ -307,4 +330,45 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
     }
 
     return 0;
+}
+
+/* Register a Control Handler */
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
+{
+    /* All return FALSE so the system still handles the signals (process exits) */
+    switch (fdwCtrlType)
+    {
+    case CTRL_C_EVENT:
+        SpinnerStop();
+        fprintf(stderr, "\nCtrl-C received. Download aborted.\n\n");
+        return FALSE;
+
+    case CTRL_BREAK_EVENT:
+        SpinnerStop();
+        fprintf(stderr, "\nCtrl-Break received. Download aborted.\n\n");
+        return FALSE;
+
+    default:
+        return FALSE;
+    }
+}
+
+/* Start the Windows Terminal tab spinner */
+void SpinnerStart(void)
+{
+    if (g_UsingWT)
+    {
+        printf("\x1b]9;4;3\x1b\\");
+        fflush(stdout);
+    }
+}
+
+/* Stop the Windows Terminal tab spinner */
+void SpinnerStop(void)
+{
+    if (g_UsingWT)
+    {
+        printf("\x1b]9;4;0\x1b\\");
+        fflush(stdout);
+    }
 }
