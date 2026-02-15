@@ -23,6 +23,7 @@
 #define MEBIBYTE (1024ULL * 1024ULL)
 
 int DownloadFile(const char *userAgent, const char *url);
+int FileExists(const char* fileName);
 void PrintWinINetError(const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
 
@@ -116,6 +117,33 @@ int DownloadFile(const char *userAgent, const char *url)
         fprintf(stderr, "Destination File [%s]\n\n", fileName);
     }
 
+    if (FileExists(fileName))
+    {
+        fprintf(stderr, "File [%s] exists in current directory. Overwrite? (Y/N): ", fileName);
+
+        int c;
+        while (1)
+        {
+            c = getchar();
+            while (getchar() != '\n');
+
+            if (c == 'Y' || c == 'y')
+            {
+                break;
+            }
+            else if (c == 'N' || c == 'n')
+            {
+                InternetCloseHandle(hFile);
+                InternetCloseHandle(hInternet);
+                return 1;
+            }
+            else
+            {
+                fprintf(stderr, "Please enter Y or N: ");
+            }
+        }
+    }
+
     ULONGLONG totalSize = GetDownloadFileSize(hFile);
     ULONGLONG downloadedSize = 0;
 
@@ -192,6 +220,23 @@ int DownloadFile(const char *userAgent, const char *url)
     InternetCloseHandle(hInternet);
 
     return 0;
+}
+
+/* Check if 'fileName' already exists in the current directory */
+int FileExists(const char* fileName)
+{
+    WIN32_FIND_DATAA FindFileData;
+    HANDLE hFile = FindFirstFileA(fileName, &FindFileData);
+
+    /* found = 1 if handle is valid or 0 if handle is invalid */
+    int found = hFile != INVALID_HANDLE_VALUE;
+
+    if (found)
+    {
+        FindClose(hFile);
+    }
+
+    return found;
 }
 
 /* Print a WinINet error message and error code. */
