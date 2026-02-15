@@ -1,9 +1,9 @@
 # WinDL
 
 A minimal Windows command-line utility for downloading content from the web.\
-Written in C and built on the native WinINet API.
+Fully Windows-native C application using the WinINet API.
 
-This project is a work in progress and focuses on clarity and simplicity.
+![WinDL in action](/assets/WinDL_1.0.gif)
 
 ### Features
 
