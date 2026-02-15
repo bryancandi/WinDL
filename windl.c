@@ -18,42 +18,42 @@
 #define PROTO_HTTPS_LEN 8
 #define PROTO_HTTP_LEN 7
 #define PROTO_FTP_LEN 6
-#define PROTO_SLASH 3
+#define PROTO_SCHEME_LEN 3
 #define REQUIRED_ARGS 2
 #define MEBIBYTE (1024ULL * 1024ULL)
 
-int download_file(const char *agent, const char *url);
-void print_wininet_error(const char *label);
-unsigned long long get_file_size(HINTERNET hFile);
+int DownloadFile(const char *userAgent, const char *url);
+void PrintWinINetError(const char *functionName);
+ULONGLONG GetDownloadFileSize(HINTERNET hFile);
 
 int main(int argc, char *argv[])
 {
-    const char *agent = "WinDL/1.0";
-    const char *prog = argv[0];
+    const char *userAgent = "WinDL/1.0";
+    const char *progName = argv[0];
 
     if (argc == REQUIRED_ARGS && (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0))
     {
-        printf("%s by Bryan C.\n", agent);
+        printf("%s by Bryan C.\n", userAgent);
         return 0;
     }
 
     if (argc != REQUIRED_ARGS)
     {
-        fprintf(stderr, "Usage: %s [URL]\n", prog);
+        fprintf(stderr, "Usage: %s [URL]\n", progName);
         return 1;
     }
 
     const char *url = argv[1];
-    const char *url_tail = url;
+    const char *urlTail = url;
 
     if (strncmp(url, "https://", PROTO_HTTPS_LEN) != 0 &&
         strncmp(url, "http://", PROTO_HTTP_LEN) != 0 &&
         strncmp(url, "ftp://", PROTO_FTP_LEN) != 0)
     {
-        const char *p = strstr(url, "://");
-        if (p)
+        const char *protoPos = strstr(url, "://");
+        if (protoPos)
         {
-            url_tail = p + 3;
+            urlTail = protoPos + 3;
         }
 
         fprintf(stderr,
@@ -61,118 +61,128 @@ int main(int argc, char *argv[])
             " - https://%s\n"
             " - http://%s\n"
             " - ftp://%s\n",
-            url_tail, url_tail, url_tail);
+            urlTail, urlTail, urlTail);
         return 1;
     }
 
-    return download_file(agent, url);
+    return DownloadFile(userAgent, url);
 }
 
 /* Open a WinINet connection, open the specified URL, and download its contents to 'dst' file. */
-int download_file(const char *agent, const char *url)
+int DownloadFile(const char *userAgent, const char *url)
 {
-    HINTERNET hInternet = InternetOpen(agent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    HINTERNET hInternet = InternetOpenA(userAgent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInternet)
     {
-        print_wininet_error("InternetOpen");
+        PrintWinINetError("InternetOpenA");
         return 1;
     }
 
-    fprintf(stderr, "%s: Internet connection established...\n\n", agent);
+    fprintf(stderr, "%s: Internet connection established...\n\n", userAgent);
 
-    HINTERNET hFile = InternetOpenUrl(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
+    HINTERNET hFile = InternetOpenUrlA(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hFile)
     {
-        print_wininet_error("InternetOpenUrl");
+        PrintWinINetError("InternetOpenUrlA");
         InternetCloseHandle(hInternet);
         return 1;
     }
 
     fprintf(stderr, "Opening Source URL [%s]\n", url);
 
-    /* Advance 'path' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
-    char *path = strstr(url, "://");
-    path += PROTO_SLASH;
-    char *fname = strrchr(path, '/');
-    char default_fname[64];
-    char *destination = "Destination File";
-    long int current_time = time(NULL);
-
-    if (!fname || *(fname + 1) == '\0')
+    /* Advance 'urlPath' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
+    const char *urlPath = strstr(url, "://");
+    if (!urlPath)
     {
-        snprintf(default_fname, sizeof(default_fname), "download_%ld", current_time);
-        fname = default_fname;
-        fprintf(stderr, "%s [%s] (no filename provided by server, using default)\n\n", destination, fname);
+        fprintf(stderr, "WinDL: Malformed URL.\n");
+        InternetCloseHandle(hFile);
+        InternetCloseHandle(hInternet);
+        return 1;
+    }
+    urlPath += PROTO_SCHEME_LEN;
+    const char *fileName = strrchr(urlPath, '/');
+    char defaultFileName[64];
+    time_t currentTime = time(NULL);
+
+    if (!fileName || *(fileName + 1) == '\0')
+    {
+        snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%ld", currentTime);
+        fileName = defaultFileName;
+        fprintf(stderr, "Destination File [%s] (no filename provided by server, using default)\n\n", fileName);
     }
     else
     {
-        fname++;
-        fprintf(stderr, "%s [%s]\n\n", destination, fname);
+        fileName++;
+        fprintf(stderr, "Destination File [%s]\n\n", fileName);
     }
 
-    unsigned long long total_size = get_file_size(hFile);
-    unsigned long long downloaded_size = 0;
+    ULONGLONG totalSize = GetDownloadFileSize(hFile);
+    ULONGLONG downloadedSize = 0;
 
     char buffer[BUFSIZ];
     DWORD bytesRead = 0;
     FILE *dst;
 
-    if ((dst = fopen(fname, "wb")) == NULL)
+    if ((dst = fopen(fileName, "wb")) == NULL)
     {
-        fprintf(stderr, "WinDL: Cannot create destination file '%s'\n", fname);
+        fprintf(stderr, "WinDL: Cannot create destination file '%s'.\n", fileName);
+        InternetCloseHandle(hFile);
+        InternetCloseHandle(hInternet);
         return 1;
     }
 
-    time_t start_time = time(NULL);
+    time_t startTime = time(NULL);
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
-        downloaded_size += bytesRead;
+        downloadedSize += bytesRead;
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
-            fprintf(stderr, "WinDL: write error on '%s'\n", fname);
+            fprintf(stderr, "WinDL: Write error on '%s'.\n", fileName);
             fclose(dst);
+            InternetCloseHandle(hFile);
+            InternetCloseHandle(hInternet);
             return 1;
         }
 
-        if (total_size > 0)
+        if (totalSize > 0)
         {
-            if (downloaded_size % (MEBIBYTE) == 0)
+            if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", total_size, downloaded_size);
+                fprintf(stderr, "\rTotal bytes: %I64u\tDownloaded bytes: %I64u", totalSize, downloadedSize);
                 fflush(stderr);
             }
         }
         else
         {
-            if (downloaded_size % (MEBIBYTE) == 0)
+            if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloaded_size);
+                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %I64u", downloadedSize);
                 fflush(stderr);
             }
         }
     }
 
-    time_t end_time = time(NULL);
-    double elapsed_time = difftime(end_time, start_time);
+    time_t endTime = time(NULL);
+    double elapsedTime = difftime(endTime, startTime);
 
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
-    if (total_size > 0)
+    if (totalSize > 0)
     {
-        fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", total_size, downloaded_size);
+        fprintf(stderr, "\rTotal bytes: %I64u\tDownloaded bytes: %I64u", totalSize, downloadedSize);
     }
     else
     {
-        fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloaded_size);
+        fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %I64u", downloadedSize);
     }
 
-    if (total_size == downloaded_size || total_size == 0)
+    if (totalSize == downloadedSize || totalSize == 0)
     {
-        fprintf(stderr, "\nDownload completed successfully. (%llu bytes in %.2lf seconds)\n", downloaded_size, elapsed_time);
+        fprintf(stderr, "\nDownload completed successfully. (%I64u bytes in %.2lf seconds)\n", downloadedSize, elapsedTime);
     }
     else
     {
-        fprintf(stderr, "\nDownload failed. (expected %llu bytes, got %llu bytes)\n", total_size, downloaded_size);
+        fprintf(stderr, "\nDownload failed. (expected %I64u bytes, got %I64u bytes)\n", totalSize, downloadedSize);
     }
 
     putchar('\n');
@@ -185,7 +195,7 @@ int download_file(const char *agent, const char *url)
 }
 
 /* Print a WinINet error message and error code. */
-void print_wininet_error(const char *label)
+void PrintWinINetError(const char *functionName)
 {
     DWORD err = GetLastError();
     char buffer[BUFSIZ];
@@ -209,23 +219,23 @@ void print_wininet_error(const char *label)
                 buffer[i] = '\0';
             }
         }
-        fprintf(stderr, "%s failed: %lu (%s)\n", label, err, buffer);
+        fprintf(stderr, "%s failed: %lu (%s)\n", functionName, err, buffer);
     }
     else
     {
-        fprintf(stderr, "%s failed: %lu\n", label, err);
+        fprintf(stderr, "%s failed: %lu\n", functionName, err);
     }
 }
 
 /* Determine handle type and attempt to get the file size. */
-unsigned long long get_file_size(HINTERNET hFile)
+ULONGLONG GetDownloadFileSize(HINTERNET hFile)
 {
-    DWORD handle_type = 0;
-    DWORD len = sizeof(handle_type);
+    DWORD handleType = 0;
+    DWORD len = sizeof(handleType);
 
-    if (InternetQueryOption(hFile, INTERNET_OPTION_HANDLE_TYPE, &handle_type, &len))
+    if (InternetQueryOption(hFile, INTERNET_OPTION_HANDLE_TYPE, &handleType, &len))
     {
-        if (handle_type == INTERNET_HANDLE_TYPE_HTTP_REQUEST)
+        if (handleType == INTERNET_HANDLE_TYPE_HTTP_REQUEST)
         {
             char buffer[64];
             DWORD size = sizeof(buffer);
@@ -237,7 +247,7 @@ unsigned long long get_file_size(HINTERNET hFile)
 
             return strtoull(buffer, NULL, 10);
         }
-        else if (handle_type == INTERNET_HANDLE_TYPE_FTP_FILE)
+        else if (handleType == INTERNET_HANDLE_TYPE_FTP_FILE)
         {
             DWORD high = 0;
             DWORD low = FtpGetFileSize(hFile, &high);
@@ -247,7 +257,7 @@ unsigned long long get_file_size(HINTERNET hFile)
                 return 0;
             }
 
-            return ((unsigned long long)high << 32) | low;
+            return ((ULONGLONG)high << 32) | low;
         }
     }
 
