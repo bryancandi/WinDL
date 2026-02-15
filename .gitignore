@@ -29,5 +29,11 @@
 !*.txt
 !Makefile
 
+# But don't ignore image files
+!*.gif
+!*.jpg
+!*.jpeg
+!*.png
+
 # Don't ignore gitignore file itself
 !.gitignore
