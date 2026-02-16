@@ -15,17 +15,33 @@
 #include <windows.h>
 #include <wininet.h>
 
+#define BUFSIZ_64B 64
+#define BUFSIZ_128B 128
+#define BUFSIZ_16K 16384
+
 #define PROTO_HTTPS_LEN 8
 #define PROTO_HTTP_LEN 7
 #define PROTO_FTP_LEN 6
 #define PROTO_SCHEME_LEN 3
 #define REQUIRED_ARGS 2
+
+#define SECONDS_PER_MINUTE 60
+#define SECONDS_PER_HOUR 3600
+#define SECONDS_PER_DAY 86400
+
+#define KIBIBYTE (1024ULL)
 #define MEBIBYTE (1024ULL * 1024ULL)
+#define GIBIBYTE (1024ULL * 1024ULL * 1024ULL)
+#define TEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL)
+#define PEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL)
 
 int DownloadFile(const char *userAgent, const char *url);
 int FileExists(const char *fileName);
 void PrintWinINetError(const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
+char *GetLocalTimeStamp(void);
+void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize);
+void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize);
 BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
 void SpinnerStart(void);
 void SpinnerStop(void);
@@ -118,7 +134,7 @@ int DownloadFile(const char *userAgent, const char *url)
     }
     urlPath += PROTO_SCHEME_LEN;
     const char *fileName = strrchr(urlPath, '/');
-    char defaultFileName[64];
+    char defaultFileName[BUFSIZ_64B];
     time_t currentTime = time(NULL);
 
     if (!fileName || *(fileName + 1) == '\0')
@@ -162,12 +178,21 @@ int DownloadFile(const char *userAgent, const char *url)
                 fprintf(stderr, "Please enter Y or N: ");
             }
         }
+
+        putchar('\n');
     }
 
     ULONGLONG totalSize = GetDownloadFileSize(hFile);
     ULONGLONG downloadedSize = 0;
+    char convertedTotalSize[BUFSIZ_64B];
+    char convertedDownloadedSize[BUFSIZ_64B];
 
-    char buffer[BUFSIZ];
+    if (totalSize > 0)
+    {
+        ConvertFromBytes(totalSize, convertedTotalSize, sizeof(convertedTotalSize));
+    }
+
+    char buffer[BUFSIZ_16K];
     DWORD bytesRead = 0;
     FILE *dst;
 
@@ -181,10 +206,16 @@ int DownloadFile(const char *userAgent, const char *url)
     }
 
     time_t startTime = time(NULL);
+    char *startTimeStamp = GetLocalTimeStamp();
+    int prevLen = 0;
+
+    fprintf(stderr, "[%s] Download Started.\n", startTimeStamp);
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
         downloadedSize += bytesRead;
+        ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize));
+
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
             SpinnerStop();
@@ -199,7 +230,14 @@ int DownloadFile(const char *userAgent, const char *url)
         {
             if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", totalSize, downloadedSize);
+                int len = fprintf(stderr, "\rTotal Size: %s / Downloaded: %s [%llu / %llu]", convertedTotalSize, convertedDownloadedSize, totalSize, downloadedSize);
+
+                if (len < prevLen)
+                {
+                    fprintf(stderr, "%*s", (int)(prevLen - len), "");
+                }
+
+                prevLen = len;
                 fflush(stderr);
             }
         }
@@ -207,7 +245,14 @@ int DownloadFile(const char *userAgent, const char *url)
         {
             if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloadedSize);
+                int len = fprintf(stderr, "\rTotal Size: unknown / Downloaded: %s [%llu]", convertedDownloadedSize, downloadedSize);
+
+                if (len < prevLen)
+                {
+                    fprintf(stderr, "%*s", (int)(prevLen - len), "");
+                }
+
+                prevLen = len;
                 fflush(stderr);
             }
         }
@@ -215,24 +260,29 @@ int DownloadFile(const char *userAgent, const char *url)
 
     time_t endTime = time(NULL);
     double elapsedTime = difftime(endTime, startTime);
+    char formatTime[BUFSIZ_64B];
+    char *endTimeStamp = GetLocalTimeStamp();
 
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
     if (totalSize > 0)
     {
-        fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", totalSize, downloadedSize);
+        fprintf(stderr, "\rTotal Size: %s / Downloaded: %s [%llu / %llu]", convertedTotalSize, convertedDownloadedSize, totalSize, downloadedSize);
     }
     else
     {
-        fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloadedSize);
+        fprintf(stderr, "\rTotal Size: unknown / Downloaded: %s [%llu]", convertedDownloadedSize, downloadedSize);
     }
+
+    putchar('\n');
 
     if (totalSize == downloadedSize || totalSize == 0)
     {
-        fprintf(stderr, "\nDownload completed successfully. (%llu bytes in %.2lf seconds)\n", downloadedSize, elapsedTime);
+        ConvertFromSeconds((ULONGLONG)elapsedTime, formatTime, sizeof(formatTime));
+        fprintf(stderr, "\n[%s] Download Completed.\nDownloaded %s in %s.\n", endTimeStamp, convertedDownloadedSize, formatTime);
     }
     else
     {
-        fprintf(stderr, "\nDownload failed. (expected %llu bytes, got %llu bytes)\n", totalSize, downloadedSize);
+        fprintf(stderr, "\n[%s] Download Failed.\nExpected %llu bytes, got %llu bytes.\n", endTimeStamp, totalSize, downloadedSize);
     }
 
     putchar('\n');
@@ -305,7 +355,7 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
     {
         if (handleType == INTERNET_HANDLE_TYPE_HTTP_REQUEST)
         {
-            char buffer[64];
+            char buffer[BUFSIZ_64B];
             DWORD size = sizeof(buffer);
 
             if (!HttpQueryInfoA(hFile, HTTP_QUERY_CONTENT_LENGTH, buffer, &size, NULL))
@@ -330,6 +380,93 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
     }
 
     return 0;
+}
+
+/* Return local time stamp */
+char *GetLocalTimeStamp(void)
+{
+    time_t currentTime = time(NULL);
+    struct tm localTimeStruct;
+    localtime_s(&localTimeStruct, &currentTime);
+
+    static char buffer[BUFSIZ_128B];
+    strftime(buffer, sizeof(buffer), "%a %b %d %H:%M:%S %Y", &localTimeStruct);
+
+    return buffer;
+}
+
+/* Convert seconds to more readable units */
+void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
+{
+    ULONGLONG days;
+    ULONGLONG hours;
+    ULONGLONG minutes;
+    ULONGLONG seconds;
+    ULONGLONG remaining;
+
+    days = inputSeconds / SECONDS_PER_DAY;
+    remaining = inputSeconds % SECONDS_PER_DAY;
+
+    hours = remaining / SECONDS_PER_HOUR;
+    remaining = remaining % SECONDS_PER_HOUR;
+
+    minutes = remaining / SECONDS_PER_MINUTE;
+    remaining = remaining % SECONDS_PER_MINUTE;
+
+    seconds = remaining;
+
+    if (days > 0)
+    {
+        snprintf(buffer, bufferSize, "%llu days, %llu hours, %llu minutes, %llu seconds", days, hours, minutes, seconds);
+    }
+    else if (hours > 0)
+    {
+        snprintf(buffer, bufferSize, "%llu hours, %llu minutes, %llu seconds", hours, minutes, seconds);
+    }
+    else if (minutes > 0)
+    {
+        snprintf(buffer, bufferSize, "%llu minutes, %llu seconds", minutes, seconds);
+    }
+    else
+    {
+        snprintf(buffer, bufferSize, "%llu seconds", seconds);
+    }
+}
+
+/* Convert bytes to other more readable units */
+void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize)
+{
+    double value;
+
+    if (bytes >= PEBIBYTE)
+    {
+        value = (double)bytes / PEBIBYTE;
+        snprintf(buffer, bufferSize, "%.2f PiB", value);
+    }
+    else if (bytes >= TEBIBYTE)
+    {
+        value = (double)bytes / TEBIBYTE;
+        snprintf(buffer, bufferSize, "%.2f TiB", value);
+    }
+    else if (bytes >= GIBIBYTE)
+    {
+        value = (double)bytes / GIBIBYTE;
+        snprintf(buffer, bufferSize, "%.2f GiB", value);
+    }
+    else if (bytes >= MEBIBYTE)
+    {
+        value = (double)bytes / MEBIBYTE;
+        snprintf(buffer, bufferSize, "%.2f MiB", value);
+    }
+    else if (bytes >= KIBIBYTE)
+    {
+        value = (double)bytes / KIBIBYTE;
+        snprintf(buffer, bufferSize, "%.2f KiB", value);
+    }
+    else
+    {
+        snprintf(buffer, bufferSize, "%llu Bytes", bytes);
+    }
 }
 
 /* Register a Control Handler */
