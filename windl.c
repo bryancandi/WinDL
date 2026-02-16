@@ -123,7 +123,7 @@ int DownloadFile(const char *userAgent, const char *url)
 
     if (!fileName || *(fileName + 1) == '\0')
     {
-        snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%ld", currentTime);
+        snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%lld", currentTime);
         fileName = defaultFileName;
         fprintf(stderr, "Destination File [%s] (no filename provided by server, using default)\n\n", fileName);
     }
@@ -199,7 +199,7 @@ int DownloadFile(const char *userAgent, const char *url)
         {
             if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: %I64u\tDownloaded bytes: %I64u", totalSize, downloadedSize);
+                fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", totalSize, downloadedSize);
                 fflush(stderr);
             }
         }
@@ -207,7 +207,7 @@ int DownloadFile(const char *userAgent, const char *url)
         {
             if (downloadedSize % (MEBIBYTE) == 0)
             {
-                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %I64u", downloadedSize);
+                fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloadedSize);
                 fflush(stderr);
             }
         }
@@ -219,20 +219,20 @@ int DownloadFile(const char *userAgent, const char *url)
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
     if (totalSize > 0)
     {
-        fprintf(stderr, "\rTotal bytes: %I64u\tDownloaded bytes: %I64u", totalSize, downloadedSize);
+        fprintf(stderr, "\rTotal bytes: %llu\tDownloaded bytes: %llu", totalSize, downloadedSize);
     }
     else
     {
-        fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %I64u", downloadedSize);
+        fprintf(stderr, "\rTotal bytes: unknown\tDownloaded bytes: %llu", downloadedSize);
     }
 
     if (totalSize == downloadedSize || totalSize == 0)
     {
-        fprintf(stderr, "\nDownload completed successfully. (%I64u bytes in %.2lf seconds)\n", downloadedSize, elapsedTime);
+        fprintf(stderr, "\nDownload completed successfully. (%llu bytes in %.2lf seconds)\n", downloadedSize, elapsedTime);
     }
     else
     {
-        fprintf(stderr, "\nDownload failed. (expected %I64u bytes, got %I64u bytes)\n", totalSize, downloadedSize);
+        fprintf(stderr, "\nDownload failed. (expected %llu bytes, got %llu bytes)\n", totalSize, downloadedSize);
     }
 
     putchar('\n');
