@@ -1,4 +1,4 @@
-# WinDL
+# 🌐 WinDL
 
 A minimal Windows command-line utility for downloading content from the web.\
 Fully Windows-native C application using the WinINet API.
@@ -23,6 +23,11 @@ Fully Windows-native C application using the WinINet API.
 ```
 
 ### Compile
+Using Makefile (recommended):
+```powershell
+make windl
+```
+Manual compilation with GCC:
 ```powershell
 gcc .\windl.c -o windl -lwininet
 ```
