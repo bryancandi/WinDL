@@ -1,12 +1,10 @@
 /*
- * WinDL: Windows Command-Line Web Download Utility
- *
- * Compile with: gcc .\windl.c -o windl -lwininet
- *
- * Usage: .\windl.exe [URL]
- *
- * Author: Bryan C.
- * Date: 2026-02-08
+ * WinDL - Windows command-line utility for downloading content from the web.
+ * Version 1.0
+ * 
+ * Copyright (c) 2026 Bryan C.
+ * 
+ * Usage: windl.exe [URL]
  */
 
 #include <stdio.h>
@@ -14,6 +12,8 @@
 #include <time.h>
 #include <windows.h>
 #include <wininet.h>
+
+#define REQUIRED_ARGS 2
 
 #define BUFSIZ_64B 64
 #define BUFSIZ_128B 128
@@ -23,22 +23,29 @@
 #define PROTO_HTTP_LEN 7
 #define PROTO_FTP_LEN 6
 #define PROTO_SCHEME_LEN 3
-#define REQUIRED_ARGS 2
 
 #define SECONDS_PER_MINUTE 60
 #define SECONDS_PER_HOUR 3600
 #define SECONDS_PER_DAY 86400
 
+#define BITS 8ULL
 #define KIBIBYTE (1024ULL)
 #define MEBIBYTE (1024ULL * 1024ULL)
 #define GIBIBYTE (1024ULL * 1024ULL * 1024ULL)
 #define TEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL)
 #define PEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL)
 
+#define BPS 1.0
+#define KBPS 1000.0
+#define MBPS 1000000.0
+#define GBPS 1000000000.0
+#define TBPS 1000000000000.0
+
 int DownloadFile(const char *userAgent, const char *url);
 int FileExists(const char *fileName);
 void PrintWinINetError(const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
+void GetDownloadSpeed(ULONGLONG bytes, ULONGLONG seconds, char *buffer, size_t bufferSize);
 char *GetLocalTimeStamp(void);
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize);
 void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize);
@@ -207,14 +214,22 @@ int DownloadFile(const char *userAgent, const char *url)
 
     time_t startTime = time(NULL);
     char *startTimeStamp = GetLocalTimeStamp();
+    char downloadSpeed[BUFSIZ_64B];
     int prevLen = 0;
 
     fprintf(stderr, "[%s] Download Started.\n", startTimeStamp);
+
+    ULONGLONG lastUpdated = GetTickCount64();
+    const ULONGLONG  updateInterval = 250;
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
         downloadedSize += bytesRead;
         ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize));
+
+        time_t cycleTime = time(NULL);
+        double cycleElapsedTime = difftime(cycleTime, startTime);
+        GetDownloadSpeed(downloadedSize, (ULONGLONG)cycleElapsedTime, downloadSpeed, sizeof(downloadSpeed));
 
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
@@ -226,35 +241,39 @@ int DownloadFile(const char *userAgent, const char *url)
             return 1;
         }
 
-        if (totalSize > 0)
+        ULONGLONG now = GetTickCount64();
+
+        if (now - lastUpdated >= updateInterval)
         {
-            if (downloadedSize % (MEBIBYTE) == 0)
+            int len;
+            if (totalSize > 0)
             {
-                int len = fprintf(stderr, "\rTotal Size: %s / Downloaded: %s [%llu / %llu]", convertedTotalSize, convertedDownloadedSize, totalSize, downloadedSize);
-
-                if (len < prevLen)
-                {
-                    fprintf(stderr, "%*s", (int)(prevLen - len), "");
-                }
-
-                prevLen = len;
-                fflush(stderr);
+                len = fprintf(stderr,
+                    "\rTotal Size: %s / Downloaded: %s [%llu / %llu] - %s",
+                    convertedTotalSize,
+                    convertedDownloadedSize,
+                    totalSize,
+                    downloadedSize,
+                    downloadSpeed);
             }
-        }
-        else
-        {
-            if (downloadedSize % (MEBIBYTE) == 0)
+            else
             {
-                int len = fprintf(stderr, "\rTotal Size: unknown / Downloaded: %s [%llu]", convertedDownloadedSize, downloadedSize);
-
-                if (len < prevLen)
-                {
-                    fprintf(stderr, "%*s", (int)(prevLen - len), "");
-                }
-
-                prevLen = len;
-                fflush(stderr);
+                len = fprintf(stderr,
+                    "\rTotal Size: unknown / Downloaded: %s [%llu] - %s",
+                    convertedDownloadedSize,
+                    downloadedSize,
+                    downloadSpeed);
             }
+
+            if (len < prevLen)
+            {
+                fprintf(stderr, "%*s", (int)(prevLen - len), "");
+            }
+
+            prevLen = len;
+            fflush(stderr);
+
+            lastUpdated = now;
         }
     }
 
@@ -266,11 +285,21 @@ int DownloadFile(const char *userAgent, const char *url)
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
     if (totalSize > 0)
     {
-        fprintf(stderr, "\rTotal Size: %s / Downloaded: %s [%llu / %llu]", convertedTotalSize, convertedDownloadedSize, totalSize, downloadedSize);
+        fprintf(stderr,
+            "\rTotal Size: %s / Downloaded: %s [%llu / %llu] - %s",
+            convertedTotalSize,
+            convertedDownloadedSize,
+            totalSize,
+            downloadedSize,
+            downloadSpeed);
     }
     else
     {
-        fprintf(stderr, "\rTotal Size: unknown / Downloaded: %s [%llu]", convertedDownloadedSize, downloadedSize);
+        fprintf(stderr,
+            "\rTotal Size: unknown / Downloaded: %s [%llu] - %s",
+            convertedDownloadedSize,
+            downloadedSize,
+            downloadSpeed);
     }
 
     putchar('\n');
@@ -278,11 +307,19 @@ int DownloadFile(const char *userAgent, const char *url)
     if (totalSize == downloadedSize || totalSize == 0)
     {
         ConvertFromSeconds((ULONGLONG)elapsedTime, formatTime, sizeof(formatTime));
-        fprintf(stderr, "\n[%s] Download Completed.\nDownloaded %s in %s.\n", endTimeStamp, convertedDownloadedSize, formatTime);
+        fprintf(stderr,
+            "\n[%s] Download Completed.\nDownloaded %s in %s.\n",
+            endTimeStamp,
+            convertedDownloadedSize,
+            formatTime);
     }
     else
     {
-        fprintf(stderr, "\n[%s] Download Failed.\nExpected %llu bytes, got %llu bytes.\n", endTimeStamp, totalSize, downloadedSize);
+        fprintf(stderr,
+            "\n[%s] Download Failed.\nExpected %llu bytes, got %llu bytes.\n",
+            endTimeStamp,
+            totalSize,
+            downloadedSize);
     }
 
     putchar('\n');
@@ -382,6 +419,40 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
     return 0;
 }
 
+/* Calculate download speed */
+void GetDownloadSpeed(ULONGLONG bytes, ULONGLONG seconds, char *buffer, size_t bufferSize)
+{
+    if (seconds == 0)
+    {
+        snprintf(buffer, bufferSize, "0 bps");
+        return;
+    }
+
+    ULONGLONG bits = bytes * BITS;
+    ULONGLONG bps = bits / seconds;
+
+    if (bps >= TBPS)
+    {
+        snprintf(buffer, bufferSize, "%.2f Tbps", bps / TBPS);
+    }
+    else if (bps >= GBPS)
+    {
+        snprintf(buffer, bufferSize, "%.2f Gbps", bps / GBPS);
+    }
+    else if (bps >= MBPS)
+    {
+        snprintf(buffer, bufferSize, "%.2f Mbps", bps / MBPS);
+    }
+    else if (bps >= KBPS)
+    {
+        snprintf(buffer, bufferSize, "%.2f Kbps", bps / KBPS);
+    }
+    else
+    {
+        snprintf(buffer, bufferSize, "%llu bps", bps);
+    }
+}
+
 /* Return local time stamp */
 char *GetLocalTimeStamp(void)
 {
@@ -417,19 +488,27 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
     if (days > 0)
     {
-        snprintf(buffer, bufferSize, "%llu days, %llu hours, %llu minutes, %llu seconds", days, hours, minutes, seconds);
+        snprintf(buffer, bufferSize,
+            "%llu days, %llu hours, %llu minutes, %llu seconds",
+            days, hours, minutes, seconds);
     }
     else if (hours > 0)
     {
-        snprintf(buffer, bufferSize, "%llu hours, %llu minutes, %llu seconds", hours, minutes, seconds);
+        snprintf(buffer, bufferSize,
+            "%llu hours, %llu minutes, %llu seconds",
+            hours, minutes, seconds);
     }
     else if (minutes > 0)
     {
-        snprintf(buffer, bufferSize, "%llu minutes, %llu seconds", minutes, seconds);
+        snprintf(buffer, bufferSize,
+            "%llu minutes, %llu seconds",
+            minutes, seconds);
     }
     else
     {
-        snprintf(buffer, bufferSize, "%llu seconds", seconds);
+        snprintf(buffer, bufferSize,
+            "%llu seconds",
+            seconds);
     }
 }
 
