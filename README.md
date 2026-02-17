@@ -1,17 +1,19 @@
 # 🌐 WinDL
 
-A minimal Windows command-line utility for downloading content from the web.\
-Fully Windows-native C application using the WinINet API.
+A lightweight Windows command-line utility for downloading content from the web.\
+Built as a fully Windows-native C application using the WinINet API.
 
 ![WinDL in action](/assets/WinDL_1.0.gif)
 
 ### Features
 
 - Download files over HTTP, HTTPS, or FTP.
-- Display total file size (when available) and track download progress.
 - Display file sizes in human-readable units and raw bytes.
-- Display current download speed.
-- Built using the native Windows WinINet API.
+- Real-time download progress with total file size display (when available).
+- Real-time download speed calculation.
+- Safe file overwrite verification.
+- Defensive error checking with descriptive WinINet error reporting.
+- Fully Windows-native C application.
 
 ### Usage
 
@@ -28,7 +30,7 @@ Using Makefile (recommended):
 ```powershell
 make windl
 ```
-Manual compilation with GCC:
+Manual compilation (MinGW GCC):
 ```powershell
 gcc .\windl.c -o windl -lwininet
 ```
