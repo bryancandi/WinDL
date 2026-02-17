@@ -9,7 +9,8 @@ Fully Windows-native C application using the WinINet API.
 
 - Download files over HTTP, HTTPS, or FTP.
 - Display total file size (when available) and track download progress.
-- Simple command-line interface.
+- Display file sizes in human-readable units and raw bytes.
+- Display current download speed.
 - Built using the native Windows WinINet API.
 
 ### Usage
