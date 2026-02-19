@@ -29,23 +29,25 @@
 #define SECONDS_PER_DAY 86400
 
 #define BITS 8ULL
-#define KIBIBYTE (1024ULL)
-#define MEBIBYTE (1024ULL * 1024ULL)
-#define GIBIBYTE (1024ULL * 1024ULL * 1024ULL)
-#define TEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL)
-#define PEBIBYTE (1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL)
+
+#define KIBIBYTE 1024ULL
+#define MEBIBYTE (KIBIBYTE * 1024ULL)
+#define GIBIBYTE (MEBIBYTE * 1024ULL)
+#define TEBIBYTE (GIBIBYTE * 1024ULL)
+#define PEBIBYTE (TEBIBYTE * 1024ULL)
 
 #define BPS 1.0
 #define KBPS 1000.0
-#define MBPS 1000000.0
-#define GBPS 1000000000.0
-#define TBPS 1000000000000.0
+#define MBPS (KBPS * 1000.0)
+#define GBPS (MBPS * 1000.0)
+#define TBPS (GBPS * 1000.0)
+#define PBPS (TBPS * 1000.0)
 
 int DownloadFile(const char *userAgent, const char *url);
 int FileExists(const char *fileName);
 void PrintWinINetError(const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
-void GetDownloadSpeed(ULONGLONG bytes, ULONGLONG seconds, char *buffer, size_t bufferSize);
+void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize);
 char *GetLocalTimeStamp(void);
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize);
 void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize);
@@ -229,7 +231,7 @@ int DownloadFile(const char *userAgent, const char *url)
 
         time_t cycleTime = time(NULL);
         double cycleElapsedTime = difftime(cycleTime, startTime);
-        GetDownloadSpeed(downloadedSize, (ULONGLONG)cycleElapsedTime, downloadSpeed, sizeof(downloadSpeed));
+        GetDownloadSpeed(downloadedSize, cycleElapsedTime, downloadSpeed, sizeof(downloadSpeed));
 
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
@@ -420,18 +422,21 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
 }
 
 /* Calculate download speed */
-void GetDownloadSpeed(ULONGLONG bytes, ULONGLONG seconds, char *buffer, size_t bufferSize)
+void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize)
 {
-    if (seconds == 0)
+    if (seconds <= 0.0)
     {
         snprintf(buffer, bufferSize, "0 bps");
         return;
     }
 
-    ULONGLONG bits = bytes * BITS;
-    ULONGLONG bps = bits / seconds;
+    double bps = (double)bytes * BITS / seconds;
 
-    if (bps >= TBPS)
+    if (bps >= PBPS)
+    {
+        snprintf(buffer, bufferSize, "%.2f Pbps", bps / PBPS);
+    }
+    else if (bps >= TBPS)
     {
         snprintf(buffer, bufferSize, "%.2f Tbps", bps / TBPS);
     }
@@ -449,7 +454,7 @@ void GetDownloadSpeed(ULONGLONG bytes, ULONGLONG seconds, char *buffer, size_t b
     }
     else
     {
-        snprintf(buffer, bufferSize, "%llu bps", bps);
+        snprintf(buffer, bufferSize, "%.0f bps", bps);
     }
 }
 
