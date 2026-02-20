@@ -28,9 +28,10 @@ Built as a fully Windows-native C application using the WinINet API.
 ### Compile
 Using Makefile (recommended):
 ```powershell
+make clean
 make windl
 ```
 Manual compilation (MinGW GCC):
 ```powershell
-gcc .\windl.c -o windl -lwininet
+gcc -Wall -Wextra -Wpedantic windl.c -o windl -lwininet
 ```
