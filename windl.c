@@ -358,7 +358,9 @@ void PrintWinINetError(const char *functionName)
     char buffer[BUFSIZ];
 
     DWORD len = FormatMessageA(
-        FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_IGNORE_INSERTS,
+        FORMAT_MESSAGE_FROM_SYSTEM |
+        FORMAT_MESSAGE_FROM_HMODULE |
+        FORMAT_MESSAGE_IGNORE_INSERTS,
         GetModuleHandleA("wininet.dll"),
         err,
         0,
