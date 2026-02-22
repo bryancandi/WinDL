@@ -45,7 +45,7 @@
 
 int DownloadFile(const char *userAgent, const char *url);
 int FileExists(const char *fileName);
-void PrintWinINetError(const char *functionName);
+void PrintWinINetError(const char *userAgent, const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
 void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize);
 char *GetLocalTimeStamp(void);
@@ -114,21 +114,20 @@ int DownloadFile(const char *userAgent, const char *url)
     if (!hInternet)
     {
         SpinnerStop();
-        PrintWinINetError("InternetOpenA");
+        PrintWinINetError(userAgent, "InternetOpenA");
         return 1;
     }
-
-    fprintf(stderr, "%s: Internet connection established...\n\n", userAgent);
 
     HINTERNET hFile = InternetOpenUrlA(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hFile)
     {
         SpinnerStop();
-        PrintWinINetError("InternetOpenUrlA");
+        PrintWinINetError(userAgent, "InternetOpenUrlA");
         InternetCloseHandle(hInternet);
         return 1;
     }
 
+    fprintf(stderr, "%s: Network connection established...\n\n", userAgent);
     fprintf(stderr, "Opening Source URL [%s]\n", url);
 
     /* Advance 'urlPath' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
@@ -136,7 +135,7 @@ int DownloadFile(const char *userAgent, const char *url)
     if (!urlPath)
     {
         SpinnerStop();
-        fprintf(stderr, "WinDL: Malformed URL.\n");
+        fprintf(stderr, "%s: Malformed URL.\n", userAgent);
         InternetCloseHandle(hFile);
         InternetCloseHandle(hInternet);
         return 1;
@@ -208,7 +207,7 @@ int DownloadFile(const char *userAgent, const char *url)
     if ((dst = fopen(fileName, "wb")) == NULL)
     {
         SpinnerStop();
-        fprintf(stderr, "WinDL: Cannot create destination file '%s'.\n", fileName);
+        fprintf(stderr, "%s: Cannot create destination file '%s'.\n", userAgent, fileName);
         InternetCloseHandle(hFile);
         InternetCloseHandle(hInternet);
         return 1;
@@ -236,7 +235,7 @@ int DownloadFile(const char *userAgent, const char *url)
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
             SpinnerStop();
-            fprintf(stderr, "WinDL: Write error on '%s'.\n", fileName);
+            fprintf(stderr, "%s: Write error on '%s'.\n", userAgent, fileName);
             fclose(dst);
             InternetCloseHandle(hFile);
             InternetCloseHandle(hInternet);
@@ -351,8 +350,8 @@ int FileExists(const char *fileName)
     return found;
 }
 
-/* Print a WinINet error message and error code. */
-void PrintWinINetError(const char *functionName)
+/* Print a WinINet or system generated error message and error code. */
+void PrintWinINetError(const char *userAgent, const char *functionName)
 {
     DWORD err = GetLastError();
     char buffer[BUFSIZ];
@@ -378,11 +377,20 @@ void PrintWinINetError(const char *functionName)
                 buffer[i] = '\0';
             }
         }
-        fprintf(stderr, "%s failed: %lu (%s)\n", functionName, err, buffer);
+        fprintf(stderr,
+            "%s: %s\n(%s, error %lu)\n",
+            userAgent,
+            buffer,
+            functionName,
+            err);
     }
     else
     {
-        fprintf(stderr, "%s failed: %lu\n", functionName, err);
+        fprintf(stderr,
+            "%s: %s, error %lu\n",
+            userAgent,
+            functionName,
+            err);
     }
 }
 
@@ -563,12 +571,12 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
     {
     case CTRL_C_EVENT:
         SpinnerStop();
-        fprintf(stderr, "\nCtrl-C received. Download aborted.\n\n");
+        fprintf(stderr, "\nKeyboard interrupt received (Ctrl-C). Download aborted.\n\n");
         return FALSE;
 
     case CTRL_BREAK_EVENT:
         SpinnerStop();
-        fprintf(stderr, "\nCtrl-Break received. Download aborted.\n\n");
+        fprintf(stderr, "\nKeyboard interrupt received (Ctrl-Break). Download aborted.\n\n");
         return FALSE;
 
     default:
