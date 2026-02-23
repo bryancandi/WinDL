@@ -378,7 +378,7 @@ void PrintWinINetError(const char *userAgent, const char *functionName)
             }
         }
         fprintf(stderr,
-            "%s: %s\n(%s, error %lu)\n",
+            "%s: %s\n(%s, error %lu)\n\n",
             userAgent,
             buffer,
             functionName,
@@ -387,7 +387,7 @@ void PrintWinINetError(const char *userAgent, const char *functionName)
     else
     {
         fprintf(stderr,
-            "%s: %s, error %lu\n",
+            "%s: %s, error %lu\n\n",
             userAgent,
             functionName,
             err);
@@ -484,46 +484,59 @@ char *GetLocalTimeStamp(void)
 /* Convert seconds to more readable units */
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 {
-    ULONGLONG days;
-    ULONGLONG hours;
-    ULONGLONG minutes;
-    ULONGLONG seconds;
-    ULONGLONG remaining;
+    ULONGLONG days, hours, minutes, seconds, remaining;
 
     days = inputSeconds / SECONDS_PER_DAY;
     remaining = inputSeconds % SECONDS_PER_DAY;
 
     hours = remaining / SECONDS_PER_HOUR;
-    remaining = remaining % SECONDS_PER_HOUR;
+    remaining %= SECONDS_PER_HOUR;
 
     minutes = remaining / SECONDS_PER_MINUTE;
-    remaining = remaining % SECONDS_PER_MINUTE;
+    remaining %= SECONDS_PER_MINUTE;
 
     seconds = remaining;
 
+    size_t offset = 0;
+
     if (days > 0)
     {
-        snprintf(buffer, bufferSize,
-            "%llu days, %llu hours, %llu minutes, %llu seconds",
-            days, hours, minutes, seconds);
+        offset += snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            days, (days == 1) ? "day" : "days");
     }
-    else if (hours > 0)
+
+    if (hours > 0)
     {
-        snprintf(buffer, bufferSize,
-            "%llu hours, %llu minutes, %llu seconds",
-            hours, minutes, seconds);
+        if (offset > 0)
+        {
+            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+        }
+        offset += snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            hours, (hours == 1) ? "hour" : "hours");
     }
-    else if (minutes > 0)
+
+    if (minutes > 0)
     {
-        snprintf(buffer, bufferSize,
-            "%llu minutes, %llu seconds",
-            minutes, seconds);
+        if (offset > 0)
+        {
+            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+        }
+        offset += snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            minutes, (minutes == 1) ? "minute" : "minutes");
     }
-    else
+
+    if (seconds > 0 || inputSeconds == 0)
     {
-        snprintf(buffer, bufferSize,
-            "%llu seconds",
-            seconds);
+        if (offset > 0)
+        {
+            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+        }
+        offset += snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            seconds, (seconds == 1) ? "second" : "seconds");
     }
 }
 
