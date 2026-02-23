@@ -484,6 +484,13 @@ char *GetLocalTimeStamp(void)
 /* Convert seconds to more readable units */
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 {
+    if (bufferSize == 0)
+    {
+        return;
+    }
+
+    buffer[0] = '\0';
+
     ULONGLONG days, hours, minutes, seconds, remaining;
 
     days = inputSeconds / SECONDS_PER_DAY;
@@ -499,45 +506,59 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
     size_t offset = 0;
 
+    /*
+     * Append formatted text safely.
+     * Returns early if snprintf fails or truncation would occur.
+     */
+    #define APPEND(fmt, ...)                                    \
+    do {                                                        \
+        int n = snprintf(buffer + offset,                       \
+                         bufferSize - offset,                   \
+                         fmt, __VA_ARGS__);                     \
+        if (n < 0 || (size_t)n >= bufferSize - offset)          \
+        {                                                       \
+            buffer[bufferSize - 1] = '\0';                      \
+            return;                                             \
+        }                                                       \
+        offset += (size_t)n;                                    \
+    } while (0)
+
     if (days > 0)
     {
-        offset += snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            days, (days == 1) ? "day" : "days");
+        APPEND("%llu %s", days, (days == 1) ? "day" : "days");
     }
 
     if (hours > 0)
     {
         if (offset > 0)
         {
-            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+            APPEND("%s", ", ");
         }
-        offset += snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            hours, (hours == 1) ? "hour" : "hours");
+
+        APPEND("%llu %s", hours, (hours == 1) ? "hour" : "hours");
     }
 
     if (minutes > 0)
     {
         if (offset > 0)
         {
-            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+            APPEND("%s", ", ");
         }
-        offset += snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            minutes, (minutes == 1) ? "minute" : "minutes");
+
+        APPEND("%llu %s", minutes, (minutes == 1) ? "minute" : "minutes");
     }
 
     if (seconds > 0 || inputSeconds == 0)
     {
         if (offset > 0)
         {
-            offset += snprintf(buffer + offset, bufferSize - offset, ", ");
+            APPEND("%s", ", ");
         }
-        offset += snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            seconds, (seconds == 1) ? "second" : "seconds");
+
+        APPEND("%llu %s", seconds, (seconds == 1) ? "second" : "seconds");
     }
+
+    #undef APPEND
 }
 
 /* Convert bytes to other more readable units */
