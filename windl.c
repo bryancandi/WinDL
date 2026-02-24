@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
         strncmp(url, "ftp://", PROTO_FTP_LEN) != 0)
     {
         const char *protoPos = strstr(url, "://");
+
         if (protoPos)
         {
             urlTail = protoPos + 3;
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
             " - http://%s\n"
             " - ftp://%s\n",
             urlTail, urlTail, urlTail);
+
         return 1;
     }
 
@@ -247,6 +249,7 @@ int DownloadFile(const char *userAgent, const char *url)
         if (now - lastUpdated >= updateInterval)
         {
             int len;
+
             if (totalSize > 0)
             {
                 len = fprintf(stderr,
@@ -308,6 +311,7 @@ int DownloadFile(const char *userAgent, const char *url)
     if (totalSize == downloadedSize || totalSize == 0)
     {
         ConvertFromSeconds((ULONGLONG)elapsedTime, formatTime, sizeof(formatTime));
+
         fprintf(stderr,
             "\n[%s] Download Completed.\nDownloaded %s in %s.\n",
             endTimeStamp,
@@ -377,6 +381,7 @@ void PrintWinINetError(const char *userAgent, const char *functionName)
                 buffer[i] = '\0';
             }
         }
+
         fprintf(stderr,
             "%s: %s\n(%s, error %lu)\n\n",
             userAgent,
@@ -535,6 +540,7 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
             offset += n;
         }
+
         int n = snprintf(buffer + offset, bufferSize - offset,
             "%llu %s",
             hours, (hours == 1) ? "hour" : "hours");
@@ -562,6 +568,7 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
             offset += n;
         }
+
         int n = snprintf(buffer + offset, bufferSize - offset,
             "%llu %s",
             minutes, (minutes == 1) ? "minute" : "minutes");
@@ -589,6 +596,7 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
             offset += n;
         }
+
         int n = snprintf(buffer + offset, bufferSize - offset,
             "%llu %s",
             seconds, (seconds == 1) ? "second" : "seconds");
