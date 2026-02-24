@@ -242,7 +242,7 @@ int DownloadFile(const char *userAgent, const char *url)
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
         downloadedSize += bytesRead;
-        ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize)); 
+        ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize));
 
         time_t cycleTime = time(NULL);
         double cycleElapsedTime = difftime(cycleTime, startTime);
@@ -551,15 +551,21 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize,
     {
         if (days > 0)
         {
-            snprintf(buffer, bufferSize, "%02llu:%02llu:%02llu:%02llu", days, hours, minutes, seconds);
+            snprintf(buffer, bufferSize,
+                "%02llu:%02llu:%02llu:%02llu",
+                days, hours, minutes, seconds);
         }
         else if (hours > 0)
         {
-            snprintf(buffer, bufferSize, "%02llu:%02llu:%02llu", hours, minutes, seconds);
+            snprintf(buffer, bufferSize,
+                "%02llu:%02llu:%02llu",
+                hours, minutes, seconds);
         }
         else
         {
-            snprintf(buffer, bufferSize, "%02llu:%02llu", minutes, seconds);
+            snprintf(buffer, bufferSize,
+                "%02llu:%02llu",
+                minutes, seconds);
         }
     }
     else
