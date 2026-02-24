@@ -132,7 +132,7 @@ int DownloadFile(const char *userAgent, const char *url)
     }
 
     fprintf(stderr, "%s: Network connection established...\n\n", userAgent);
-    fprintf(stderr, "Opening Source URL [%s]\n", url);
+    fprintf(stderr, "%-16s: %s\n", "Source URL", url);
 
     /* Advance 'urlPath' past protocol:// in 'url'; check beyond last '/' (if present) to determine filename */
     const char *urlPath = strstr(url, "://");
@@ -154,12 +154,13 @@ int DownloadFile(const char *userAgent, const char *url)
     {
         snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%lld", (long long)currentTime);
         fileName = defaultFileName;
-        fprintf(stderr, "Destination File [%s] (no filename provided by server, using default)\n\n", fileName);
+        fprintf(stderr, "%-16s: %s %s\n",
+            "Destination File", fileName, "(no filename provided by the server)");
     }
     else
     {
         fileName++;
-        fprintf(stderr, "Destination File [%s]\n", fileName);
+        fprintf(stderr, "%-16s: %s\n", "Destination File", fileName);
     }
 
     ULONGLONG totalSize = GetDownloadFileSize(hFile);
@@ -169,11 +170,12 @@ int DownloadFile(const char *userAgent, const char *url)
     {
         ConvertFromBytes(totalSize, convertedTotalSize, sizeof(convertedTotalSize));
 
-        fprintf(stderr, "Total File Size [%s - %llu]\n\n", convertedTotalSize, totalSize);
+        fprintf(stderr, "%-16s: %s (%llu bytes)\n\n",
+            "Total File Size", convertedTotalSize, totalSize);
     }
     else
     {
-        fprintf(stderr, "Total File Size [unknown]\n\n");
+        fprintf(stderr, "%-16s: %s\n\n", "Total File Size", "unknown");
     }
 
     if (FileExists(fileName))
@@ -181,12 +183,15 @@ int DownloadFile(const char *userAgent, const char *url)
         SpinnerStop();
 
         fprintf(stderr, "File [%s] exists in current directory. Overwrite? (Y/N): ", fileName);
+        fflush(stderr);
 
         int c;
         while (1)
         {
             c = getchar();
-            while (getchar() != '\n');
+
+            int discard;
+            while ((discard = getchar()) != '\n' && discard != EOF);
 
             if (c == 'Y' || c == 'y')
             {
@@ -203,6 +208,7 @@ int DownloadFile(const char *userAgent, const char *url)
             else
             {
                 fprintf(stderr, "Please enter Y or N: ");
+                fflush(stderr);
             }
         }
 
@@ -358,7 +364,7 @@ int DownloadFile(const char *userAgent, const char *url)
     else
     {
         fprintf(stderr,
-            "\n[%s] Download Failed.\nExpected %llu bytes, got %llu bytes.\n",
+            "\n[%s] Download Failed.\nExpected %llu bytes; received %llu bytes.\n",
             endTimeStamp,
             totalSize,
             downloadedSize);
