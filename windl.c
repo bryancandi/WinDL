@@ -263,7 +263,7 @@ int DownloadFile(const char *userAgent, const char *url)
         }
         else
         {
-            formatEtaTime[0] = '\0';
+            snprintf(formatEtaTime, sizeof(formatEtaTime), "00:00");
         }
 
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
