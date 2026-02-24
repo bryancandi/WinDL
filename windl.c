@@ -19,10 +19,12 @@
 #define BUFSIZ_128B 128
 #define BUFSIZ_16K 16384
 
+#define UPDATE_INTERVAL_MS 500
+
 #define PROTO_HTTPS_LEN 8
 #define PROTO_HTTP_LEN 7
 #define PROTO_FTP_LEN 6
-#define PROTO_SCHEME_LEN 3
+#define PROTO_DELIM_LEN 3
 
 #define SECONDS_PER_MINUTE 60
 #define SECONDS_PER_HOUR 3600
@@ -49,7 +51,7 @@ void PrintWinINetError(const char *userAgent, const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
 void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize);
 char *GetLocalTimeStamp(void);
-void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize);
+void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize, int simpleFormat);
 void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize);
 BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
 void SpinnerStart(void);
@@ -142,21 +144,36 @@ int DownloadFile(const char *userAgent, const char *url)
         InternetCloseHandle(hInternet);
         return 1;
     }
-    urlPath += PROTO_SCHEME_LEN;
+
+    urlPath += PROTO_DELIM_LEN;
     const char *fileName = strrchr(urlPath, '/');
     char defaultFileName[BUFSIZ_64B];
     time_t currentTime = time(NULL);
 
     if (!fileName || *(fileName + 1) == '\0')
     {
-        snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%lld", currentTime);
+        snprintf(defaultFileName, sizeof(defaultFileName), "WinDL_%lld", (long long)currentTime);
         fileName = defaultFileName;
         fprintf(stderr, "Destination File [%s] (no filename provided by server, using default)\n\n", fileName);
     }
     else
     {
         fileName++;
-        fprintf(stderr, "Destination File [%s]\n\n", fileName);
+        fprintf(stderr, "Destination File [%s]\n", fileName);
+    }
+
+    ULONGLONG totalSize = GetDownloadFileSize(hFile);
+    char convertedTotalSize[BUFSIZ_64B];
+
+    if (totalSize > 0)
+    {
+        ConvertFromBytes(totalSize, convertedTotalSize, sizeof(convertedTotalSize));
+
+        fprintf(stderr, "Total File Size [%s - %llu]\n\n", convertedTotalSize, totalSize);
+    }
+    else
+    {
+        fprintf(stderr, "Total File Size [unknown]\n\n");
     }
 
     if (FileExists(fileName))
@@ -192,16 +209,6 @@ int DownloadFile(const char *userAgent, const char *url)
         putchar('\n');
     }
 
-    ULONGLONG totalSize = GetDownloadFileSize(hFile);
-    ULONGLONG downloadedSize = 0;
-    char convertedTotalSize[BUFSIZ_64B];
-    char convertedDownloadedSize[BUFSIZ_64B];
-
-    if (totalSize > 0)
-    {
-        ConvertFromBytes(totalSize, convertedTotalSize, sizeof(convertedTotalSize));
-    }
-
     char buffer[BUFSIZ_16K];
     DWORD bytesRead = 0;
     FILE *dst;
@@ -215,24 +222,49 @@ int DownloadFile(const char *userAgent, const char *url)
         return 1;
     }
 
-    time_t startTime = time(NULL);
-    char *startTimeStamp = GetLocalTimeStamp();
     char downloadSpeed[BUFSIZ_64B];
-    int prevLen = 0;
+    ULONGLONG downloadedSize = 0;
+    char convertedDownloadedSize[BUFSIZ_64B];
 
-    fprintf(stderr, "[%s] Download Started.\n", startTimeStamp);
+    ULONGLONG etaSeconds = 0;
+    char formatEtaTime[BUFSIZ_64B];
 
     ULONGLONG lastUpdated = GetTickCount64();
-    const ULONGLONG  updateInterval = 250;
+    const ULONGLONG  updateInterval = UPDATE_INTERVAL_MS;
+
+    int prevLen = 0;
+
+    time_t startTime = time(NULL);
+    char *startTimeStamp = GetLocalTimeStamp();
+
+    fprintf(stderr, "[%s] Download Started.\n", startTimeStamp);
 
     while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
     {
         downloadedSize += bytesRead;
-        ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize));
+        ConvertFromBytes(downloadedSize, convertedDownloadedSize, sizeof(convertedDownloadedSize)); 
 
         time_t cycleTime = time(NULL);
         double cycleElapsedTime = difftime(cycleTime, startTime);
         GetDownloadSpeed(downloadedSize, cycleElapsedTime, downloadSpeed, sizeof(downloadSpeed));
+
+        double bytesPerSecond = 0.0;
+
+        if (cycleElapsedTime > 0.0)
+        {
+            bytesPerSecond = downloadedSize / cycleElapsedTime;
+        }
+
+        if (totalSize > 0 && bytesPerSecond > 0.0)
+        {
+            ULONGLONG remaining = totalSize - downloadedSize;
+            etaSeconds = (ULONGLONG)(remaining / bytesPerSecond);
+            ConvertFromSeconds(etaSeconds, formatEtaTime, sizeof(formatEtaTime), 1);
+        }
+        else
+        {
+            formatEtaTime[0] = '\0';
+        }
 
         if (fwrite(buffer, 1, bytesRead, dst) != bytesRead)
         {
@@ -253,17 +285,16 @@ int DownloadFile(const char *userAgent, const char *url)
             if (totalSize > 0)
             {
                 len = fprintf(stderr,
-                    "\rTotal Size: %s / Downloaded: %s [%llu / %llu] - %s",
-                    convertedTotalSize,
+                    "\rDownloaded: %s [%llu] - %s (ETA %s)",
                     convertedDownloadedSize,
-                    totalSize,
                     downloadedSize,
-                    downloadSpeed);
+                    downloadSpeed,
+                    formatEtaTime);
             }
             else
             {
                 len = fprintf(stderr,
-                    "\rTotal Size: unknown / Downloaded: %s [%llu] - %s",
+                    "\rDownloaded: %s [%llu] - %s",
                     convertedDownloadedSize,
                     downloadedSize,
                     downloadSpeed);
@@ -274,9 +305,9 @@ int DownloadFile(const char *userAgent, const char *url)
                 fprintf(stderr, "%*s", (int)(prevLen - len), "");
             }
 
-            prevLen = len;
             fflush(stderr);
 
+            prevLen = len;
             lastUpdated = now;
         }
     }
@@ -287,33 +318,39 @@ int DownloadFile(const char *userAgent, const char *url)
     char *endTimeStamp = GetLocalTimeStamp();
 
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
+    int len;
+
     if (totalSize > 0)
     {
-        fprintf(stderr,
-            "\rTotal Size: %s / Downloaded: %s [%llu / %llu] - %s",
-            convertedTotalSize,
+        len = fprintf(stderr,
+            "\rDownloaded: %s [%llu] - %s (ETA %s)",
             convertedDownloadedSize,
-            totalSize,
             downloadedSize,
-            downloadSpeed);
+            downloadSpeed,
+            formatEtaTime);
     }
     else
     {
-        fprintf(stderr,
-            "\rTotal Size: unknown / Downloaded: %s [%llu] - %s",
+        len = fprintf(stderr,
+            "\rDownloaded: %s [%llu] - %s",
             convertedDownloadedSize,
             downloadedSize,
             downloadSpeed);
+    }
+
+    if (len < prevLen)
+    {
+        fprintf(stderr, "%*s", (int)(prevLen - len), "");
     }
 
     putchar('\n');
 
     if (totalSize == downloadedSize || totalSize == 0)
     {
-        ConvertFromSeconds((ULONGLONG)elapsedTime, formatTime, sizeof(formatTime));
+        ConvertFromSeconds((ULONGLONG)elapsedTime, formatTime, sizeof(formatTime), 0);
 
         fprintf(stderr,
-            "\n[%s] Download Completed.\nDownloaded %s in %s.\n",
+            "\n[%s] Download Completed.\nDownloaded: %s in %s.\n",
             endTimeStamp,
             convertedDownloadedSize,
             formatTime);
@@ -330,6 +367,7 @@ int DownloadFile(const char *userAgent, const char *url)
     putchar('\n');
 
     SpinnerStop();
+    fflush(stderr);
     fclose(dst);
     InternetCloseHandle(hFile);
     InternetCloseHandle(hInternet);
@@ -487,7 +525,7 @@ char *GetLocalTimeStamp(void)
 }
 
 /* Convert from seconds to more readable units. */
-void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
+void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize, int simpleFormat)
 {
     if (bufferSize == 0)
     {
@@ -509,28 +547,30 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
     seconds = remaining;
 
-    size_t offset = 0;
-
-    if (days > 0)
+    if (simpleFormat)
     {
-        int n = snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            days, (days == 1) ? "day" : "days");
-
-        if (n < 0 || (size_t)n >= bufferSize - offset)
+        if (days > 0)
         {
-            buffer[bufferSize - 1] = '\0';
-            return;
+            snprintf(buffer, bufferSize, "%02llu:%02llu:%02llu:%02llu", days, hours, minutes, seconds);
         }
-
-        offset += n;
-    }
-
-    if (hours > 0)
-    {
-        if (offset > 0)
+        else if (hours > 0)
         {
-            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+            snprintf(buffer, bufferSize, "%02llu:%02llu:%02llu", hours, minutes, seconds);
+        }
+        else
+        {
+            snprintf(buffer, bufferSize, "%02llu:%02llu", minutes, seconds);
+        }
+    }
+    else
+    {
+        size_t offset = 0;
+
+        if (days > 0)
+        {
+            int n = snprintf(buffer + offset, bufferSize - offset,
+                "%llu %s",
+                days, (days == 1) ? "day" : "days");
 
             if (n < 0 || (size_t)n >= bufferSize - offset)
             {
@@ -541,24 +581,24 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
             offset += n;
         }
 
-        int n = snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            hours, (hours == 1) ? "hour" : "hours");
-
-        if (n < 0 || (size_t)n >= bufferSize - offset)
+        if (hours > 0)
         {
-            buffer[bufferSize - 1] = '\0';
-            return;
-        }
+            if (offset > 0)
+            {
+                int n = snprintf(buffer + offset, bufferSize - offset, ", ");
 
-        offset += n;
-    }
+                if (n < 0 || (size_t)n >= bufferSize - offset)
+                {
+                    buffer[bufferSize - 1] = '\0';
+                    return;
+                }
 
-    if (minutes > 0)
-    {
-        if (offset > 0)
-        {
-            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+                offset += n;
+            }
+
+            int n = snprintf(buffer + offset, bufferSize - offset,
+                "%llu %s",
+                hours, (hours == 1) ? "hour" : "hours");
 
             if (n < 0 || (size_t)n >= bufferSize - offset)
             {
@@ -569,24 +609,24 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
             offset += n;
         }
 
-        int n = snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            minutes, (minutes == 1) ? "minute" : "minutes");
-
-        if (n < 0 || (size_t)n >= bufferSize - offset)
+        if (minutes > 0)
         {
-            buffer[bufferSize - 1] = '\0';
-            return;
-        }
+            if (offset > 0)
+            {
+                int n = snprintf(buffer + offset, bufferSize - offset, ", ");
 
-        offset += n;
-    }
+                if (n < 0 || (size_t)n >= bufferSize - offset)
+                {
+                    buffer[bufferSize - 1] = '\0';
+                    return;
+                }
 
-    if (seconds > 0 || inputSeconds == 0)
-    {
-        if (offset > 0)
-        {
-            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+                offset += n;
+            }
+
+            int n = snprintf(buffer + offset, bufferSize - offset,
+                "%llu %s",
+                minutes, (minutes == 1) ? "minute" : "minutes");
 
             if (n < 0 || (size_t)n >= bufferSize - offset)
             {
@@ -597,17 +637,33 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
             offset += n;
         }
 
-        int n = snprintf(buffer + offset, bufferSize - offset,
-            "%llu %s",
-            seconds, (seconds == 1) ? "second" : "seconds");
-
-        if (n < 0 || (size_t)n >= bufferSize - offset)
+        if (seconds > 0 || inputSeconds == 0)
         {
-            buffer[bufferSize - 1] = '\0';
-            return;
-        }
+            if (offset > 0)
+            {
+                int n = snprintf(buffer + offset, bufferSize - offset, ", ");
 
-        offset += n;
+                if (n < 0 || (size_t)n >= bufferSize - offset)
+                {
+                    buffer[bufferSize - 1] = '\0';
+                    return;
+                }
+
+                offset += n;
+            }
+
+            int n = snprintf(buffer + offset, bufferSize - offset,
+                "%llu %s",
+                seconds, (seconds == 1) ? "second" : "seconds");
+
+            if (n < 0 || (size_t)n >= bufferSize - offset)
+            {
+                buffer[bufferSize - 1] = '\0';
+                return;
+            }
+
+            offset += n;
+        }
     }
 }
 
