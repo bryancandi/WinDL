@@ -333,7 +333,7 @@ int DownloadFile(const char *userAgent, const char *url)
     return 0;
 }
 
-/* Check if 'fileName' already exists in the current directory */
+/* Check if 'fileName' already exists in the current directory. */
 int FileExists(const char *fileName)
 {
     WIN32_FIND_DATAA FindFileData;
@@ -431,7 +431,7 @@ ULONGLONG GetDownloadFileSize(HINTERNET hFile)
     return 0;
 }
 
-/* Calculate download speed */
+/* Calculate the current download speed. */
 void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize)
 {
     if (seconds <= 0.0)
@@ -468,7 +468,7 @@ void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t buff
     }
 }
 
-/* Return local time stamp */
+/* Return a timestamp in the local time. */
 char *GetLocalTimeStamp(void)
 {
     time_t currentTime = time(NULL);
@@ -481,7 +481,7 @@ char *GetLocalTimeStamp(void)
     return buffer;
 }
 
-/* Convert seconds to more readable units */
+/* Convert from seconds to more readable units. */
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 {
     if (bufferSize == 0)
@@ -506,62 +506,104 @@ void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize)
 
     size_t offset = 0;
 
-    /*
-     * Append formatted text safely.
-     * Returns early if snprintf fails or truncation would occur.
-     */
-    #define APPEND(fmt, ...)                                    \
-    do {                                                        \
-        int n = snprintf(buffer + offset,                       \
-                         bufferSize - offset,                   \
-                         fmt, __VA_ARGS__);                     \
-        if (n < 0 || (size_t)n >= bufferSize - offset)          \
-        {                                                       \
-            buffer[bufferSize - 1] = '\0';                      \
-            return;                                             \
-        }                                                       \
-        offset += (size_t)n;                                    \
-    } while (0)
-
     if (days > 0)
     {
-        APPEND("%llu %s", days, (days == 1) ? "day" : "days");
+        int n = snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            days, (days == 1) ? "day" : "days");
+
+        if (n < 0 || (size_t)n >= bufferSize - offset)
+        {
+            buffer[bufferSize - 1] = '\0';
+            return;
+        }
+
+        offset += n;
     }
 
     if (hours > 0)
     {
         if (offset > 0)
         {
-            APPEND("%s", ", ");
+            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+
+            if (n < 0 || (size_t)n >= bufferSize - offset)
+            {
+                buffer[bufferSize - 1] = '\0';
+                return;
+            }
+
+            offset += n;
+        }
+        int n = snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            hours, (hours == 1) ? "hour" : "hours");
+
+        if (n < 0 || (size_t)n >= bufferSize - offset)
+        {
+            buffer[bufferSize - 1] = '\0';
+            return;
         }
 
-        APPEND("%llu %s", hours, (hours == 1) ? "hour" : "hours");
+        offset += n;
     }
 
     if (minutes > 0)
     {
         if (offset > 0)
         {
-            APPEND("%s", ", ");
+            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+
+            if (n < 0 || (size_t)n >= bufferSize - offset)
+            {
+                buffer[bufferSize - 1] = '\0';
+                return;
+            }
+
+            offset += n;
+        }
+        int n = snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            minutes, (minutes == 1) ? "minute" : "minutes");
+
+        if (n < 0 || (size_t)n >= bufferSize - offset)
+        {
+            buffer[bufferSize - 1] = '\0';
+            return;
         }
 
-        APPEND("%llu %s", minutes, (minutes == 1) ? "minute" : "minutes");
+        offset += n;
     }
 
     if (seconds > 0 || inputSeconds == 0)
     {
         if (offset > 0)
         {
-            APPEND("%s", ", ");
+            int n = snprintf(buffer + offset, bufferSize - offset, ", ");
+
+            if (n < 0 || (size_t)n >= bufferSize - offset)
+            {
+                buffer[bufferSize - 1] = '\0';
+                return;
+            }
+
+            offset += n;
+        }
+        int n = snprintf(buffer + offset, bufferSize - offset,
+            "%llu %s",
+            seconds, (seconds == 1) ? "second" : "seconds");
+
+        if (n < 0 || (size_t)n >= bufferSize - offset)
+        {
+            buffer[bufferSize - 1] = '\0';
+            return;
         }
 
-        APPEND("%llu %s", seconds, (seconds == 1) ? "second" : "seconds");
+        offset += n;
     }
-
-    #undef APPEND
 }
 
-/* Convert bytes to other more readable units */
+/* Convert from bytes to more readable units. */
 void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize)
 {
     double value;
@@ -597,7 +639,7 @@ void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize)
     }
 }
 
-/* Register a Control Handler */
+/* Register a Control Handler. */
 BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 {
     /* All return FALSE so the system still handles the signals (process exits) */
@@ -618,7 +660,7 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
     }
 }
 
-/* Start the Windows Terminal tab spinner */
+/* Start the Windows Terminal tab spinner. */
 void SpinnerStart(void)
 {
     if (g_UsingWT)
@@ -628,7 +670,7 @@ void SpinnerStart(void)
     }
 }
 
-/* Stop the Windows Terminal tab spinner */
+/* Stop the Windows Terminal tab spinner. */
 void SpinnerStop(void)
 {
     if (g_UsingWT)
