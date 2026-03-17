@@ -18,7 +18,7 @@ Built as a fully Windows-native C application using the WinINet API.
 ### Usage
 
 ```powershell
-.\windl.exe [URL]
+.\windl.exe <URL>
 # Examples
 .\windl.exe https://www.example.com/file.zip
 .\windl.exe ftp://user:password@ftp.example.com/file.zip
