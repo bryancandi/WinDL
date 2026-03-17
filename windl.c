@@ -1,9 +1,9 @@
 /*
- * WinDL - Windows command-line utility for downloading content from the web.
+ * WinDL — Windows command-line utility for downloading content from the web.
  * Version 1.0
- * 
+ *
  * Copyright (c) 2026 Bryan C.
- * 
+ *
  * Usage: windl.exe [URL]
  */
 
@@ -228,8 +228,8 @@ int DownloadFile(const char *userAgent, const char *url)
         return 1;
     }
 
-    char downloadSpeed[BUFSIZ_64B];
     ULONGLONG downloadedSize = 0;
+    char downloadSpeed[BUFSIZ_64B];
     char convertedDownloadedSize[BUFSIZ_64B];
 
     ULONGLONG etaSeconds = 0;
@@ -238,10 +238,10 @@ int DownloadFile(const char *userAgent, const char *url)
     ULONGLONG lastUpdated = GetTickCount64();
     const ULONGLONG  updateInterval = UPDATE_INTERVAL_MS;
 
-    int prevLen = 0;
-
     time_t startTime = time(NULL);
     char *startTimeStamp = GetLocalTimeStamp();
+
+    int prevLen = 0;
 
     fprintf(stderr, "[%s] Download Started.\n", startTimeStamp);
 
