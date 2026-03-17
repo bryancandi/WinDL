@@ -50,7 +50,7 @@ int FileExists(const char *fileName);
 void PrintWinINetError(const char *userAgent, const char *functionName);
 ULONGLONG GetDownloadFileSize(HINTERNET hFile);
 void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t bufferSize);
-char *GetLocalTimeStamp(void);
+const char *GetLocalTimeStamp(void);
 void ConvertFromSeconds(ULONGLONG inputSeconds, char *buffer, size_t bufferSize, int simpleFormat);
 void ConvertFromBytes(ULONGLONG bytes, char *buffer, size_t bufferSize);
 BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
@@ -239,7 +239,7 @@ int DownloadFile(const char *userAgent, const char *url)
     const ULONGLONG  updateInterval = UPDATE_INTERVAL_MS;
 
     time_t startTime = time(NULL);
-    char *startTimeStamp = GetLocalTimeStamp();
+    const char *startTimeStamp = GetLocalTimeStamp();
 
     int prevLen = 0;
 
@@ -321,7 +321,7 @@ int DownloadFile(const char *userAgent, const char *url)
     time_t endTime = time(NULL);
     double elapsedTime = difftime(endTime, startTime);
     char formatTime[BUFSIZ_64B];
-    char *endTimeStamp = GetLocalTimeStamp();
+    const char *endTimeStamp = GetLocalTimeStamp();
 
     /* Print final downloaded file size including the last bytes < 1 MEBIBYTE (1024 * 1024) */
     int len;
@@ -518,14 +518,27 @@ void GetDownloadSpeed(ULONGLONG bytes, double seconds, char *buffer, size_t buff
 }
 
 /* Return a timestamp in the local time. */
-char *GetLocalTimeStamp(void)
+const char *GetLocalTimeStamp(void)
 {
-    time_t currentTime = time(NULL);
-    struct tm localTimeStruct;
-    localtime_s(&localTimeStruct, &currentTime);
-
     static char buffer[BUFSIZ_128B];
-    strftime(buffer, sizeof(buffer), "%a %b %d %H:%M:%S %Y", &localTimeStruct);
+    const char *error = "Time Unavailable";
+
+    time_t currentTime = time(NULL);
+    if (currentTime == (time_t)-1)
+    {
+        return error;
+    }
+
+    struct tm localTimeStruct;
+    if (localtime_s(&localTimeStruct, &currentTime) != 0)
+    {
+        return error;
+    }
+
+    if (strftime(buffer, sizeof(buffer), "%a %b %d %H:%M:%S %Y", &localTimeStruct) == 0)
+    {
+        return error;
+    }
 
     return buffer;
 }
